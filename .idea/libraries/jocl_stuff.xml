@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="jocl_stuff">
+    <CLASSES />
+    <JAVADOC />
+    <NATIVE>
+      <root url="file://$PROJECT_DIR$/jocl_stuff" />
+    </NATIVE>
+    <SOURCES />
+  </library>
+</component>
