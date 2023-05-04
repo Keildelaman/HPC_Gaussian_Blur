@@ -23,6 +23,7 @@ public class JOCLSample
                     "    int gid = get_global_id(0);"+
                     "    c[gid] = a[gid] * b[gid];"+
                     "}";
+    
 
 
     /**
