@@ -15,10 +15,12 @@ import org.jocl.*;
 
 public class GaussianBlur {
 
+
     private static final String KERNEL_SOURCE =
             "__kernel void gaussianBlur(__global const uchar4 *input, __global uchar4 *output, int width, int height, __constant float *filter, int filterSize) {"
                     + "int gidX = get_global_id(0);"
                     + "int gidY = get_global_id(1);"
+                    + "if (gidX < width && gidY < height) {"
                     + "float4 sum = (float4)(0.0f, 0.0f, 0.0f, 0.0f);"
                     + "float filterSum = 0.0f;"
                     + "int filterHalf = filterSize / 2;"
@@ -33,6 +35,7 @@ public class GaussianBlur {
                     + "}"
                     + "}"
                     + "output[gidY * width + gidX] = convert_uchar4_sat_rte(sum / filterSum);"
+                    + "}"
                     + "}";
 
     public static void main(String[] args) throws IOException {
@@ -86,10 +89,17 @@ public class GaussianBlur {
 
         // Gaussian filter
         float[] filter = {
-                1, 2, 1,
-                2, 4, 2,
-                1, 2, 1
+                0.000000f, 0.000001f, 0.000007f, 0.000032f, 0.000053f, 0.000032f, 0.000007f, 0.000001f, 0.000000f,
+                0.000001f, 0.000020f, 0.000239f, 0.001072f, 0.001768f, 0.001072f, 0.000239f, 0.000020f, 0.000001f,
+                0.000007f, 0.000239f, 0.002915f, 0.013064f, 0.021539f, 0.013064f, 0.002915f, 0.000239f, 0.000007f,
+                0.000032f, 0.001072f, 0.013064f, 0.058550f, 0.096533f, 0.058550f, 0.013064f, 0.001072f, 0.000032f,
+                0.000053f, 0.001768f, 0.021539f, 0.096533f, 0.159156f, 0.096533f, 0.021539f, 0.001768f, 0.000053f,
+                0.000032f, 0.001072f, 0.013064f, 0.058550f, 0.096533f, 0.058550f, 0.013064f, 0.001072f, 0.000032f,
+                0.000007f, 0.000239f, 0.002915f, 0.013064f, 0.021539f, 0.013064f, 0.002915f, 0.000239f, 0.000007f,
+                0.000001f, 0.000020f, 0.000239f, 0.001072f, 0.001768f, 0.001072f, 0.000239f, 0.000020f, 0.000001f,
+                0.000000f, 0.000001f, 0.000007f, 0.000032f, 0.000053f, 0.000032f, 0.000007f, 0.000001f, 0.000000f
         };
+
         int filterSize = 3;
         cl_mem filterMem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, filterSize * filterSize * Sizeof.cl_float, Pointer.to(FloatBuffer.wrap(filter)), null);
         clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(filterMem));
