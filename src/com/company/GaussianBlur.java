@@ -38,7 +38,7 @@ public class GaussianBlur {
                     + "}";
 
     public static void main(String[] args) throws IOException {
-        BufferedImage inputImage = ImageIO.read(new File("src/com/company/input2.png"));
+        BufferedImage inputImage = ImageIO.read(new File("src/com/company/input2_scaled.png"));
         int width = inputImage.getWidth();
         int height = inputImage.getHeight();
         int[] inputPixels = inputImage.getRGB(0, 0, width, height, null, 0, width);
@@ -94,7 +94,7 @@ public class GaussianBlur {
 //        };
 
         float[] filter = {
-                0.000134f, 0.004432f, 0.053991f, 0.241971f, 0.398943f, 0.241971f, 0.053991f, 0.004432f, 0.000134
+                0.000134f, 0.004432f, 0.053991f, 0.241971f, 0.398943f, 0.241971f, 0.053991f, 0.004432f, 0.000134f
         };
 
         int filterSize = 9;
@@ -102,19 +102,31 @@ public class GaussianBlur {
         clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(filterMem));
         clSetKernelArg(kernel, 5, Sizeof.cl_int, Pointer.to(new int[]{filterSize}));
 
-        long[] localWorkSize = new long[]{16, 16}; // Change this to desired local work group size
+        long[] localWorkSize = new long[]{width};
+        long[] globalWorkSize = new long[]{width * height};
+//        long[] localWorkSize = new long[]{16, 16}; // Change this to desired local work group size
 
-        if (localWorkSize[0] * localWorkSize[1] <= maxWorkGroupSize) {
+        if (localWorkSize[0] <= maxWorkGroupSize) {
 
-            long[] globalWorkSize = new long[]{
-                    (long) Math.ceil(width / (double) localWorkSize[0]) * localWorkSize[0],
-                    (long) Math.ceil(height / (double) localWorkSize[1]) * localWorkSize[1]
-            };
-
-            clEnqueueNDRangeKernel(commandQueue, kernel, 2, null, globalWorkSize, localWorkSize, 0, null, null);
+//            long[] globalWorkSize = new long[]{
+//                    (long) Math.ceil(width / (double) localWorkSize[0]) * localWorkSize[0],
+//                    (long) Math.ceil(height / (double) localWorkSize[1]) * localWorkSize[1]
+//            };
+            int horizontal = 1;
+            clSetKernelArg(kernel, 6, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
+            clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, localWorkSize, 0, null, null);
 
             ByteBuffer outputBuffer = ByteBuffer.allocateDirect(width * height * 4);
             clEnqueueReadBuffer(commandQueue, outputMem, CL_TRUE, 0, width * height * 4, Pointer.to(outputBuffer), 0, null, null);
+
+
+//            // vertical pass
+//            localWorkSize = new long[]{height};
+//            horizontal = 0;
+//
+//            clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(outputBuffer));
+//            clSetKernelArg(kernel, 6, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
+//            clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, localWorkSize, 0, null, null);
 
             int[] outputPixels = new int[width * height];
             for (int i = 0; i < outputPixels.length; i++) {
