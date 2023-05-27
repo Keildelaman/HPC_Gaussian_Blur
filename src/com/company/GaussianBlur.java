@@ -49,7 +49,7 @@ public class GaussianBlur {
                     + "}";
 
     public static void main(String[] args) throws IOException {
-        BufferedImage inputImage = ImageIO.read(new File("src/com/company/input2_scaled.png"));
+        BufferedImage inputImage = ImageIO.read(new File("src/com/company/input.png"));
         int width = inputImage.getWidth();
         int height = inputImage.getHeight();
         int[] inputPixels = inputImage.getRGB(0, 0, width, height, null, 0, width);
