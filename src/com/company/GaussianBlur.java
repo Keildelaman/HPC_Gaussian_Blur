@@ -16,25 +16,36 @@ public class GaussianBlur {
 
 
     private static final String KERNEL_SOURCE =
-            "__kernel void gaussianBlur(__global const uchar4 *input, __global uchar4 *output, int width, int height, __constant float *filter, int filterSize) {"
-                    + "int gidX = get_global_id(0);"
-                    + "int gidY = get_global_id(1);"
-                    + "if (gidX < width && gidY < height) {"
+            "__kernel void gaussianBlur(__global const uchar4 *input, __global uchar4 *output, __constant float *filter, int filterSize, int horizontal) {"
+                    + "int gid = get_global_id(0);"
+                    + "int lid = get_local_id(0);"
+                    + "int groupSize = get_local_size(0);"
+                    + "int globalSize = get_global_size(0);"
+                    + "int oppositeSize = globalSize / groupSize;"
+                    + "__local float4 localMem[256];"
+                    + ""
+                    + "localMem[lid] = convert_float4(input[gid]);"
+                    + ""
+                    + "barrier(CLK_LOCAL_MEM_FENCE);"
+                    + ""
                     + "float4 sum = (float4)(0.0f, 0.0f, 0.0f, 0.0f);"
                     + "float filterSum = 0.0f;"
                     + "int filterHalf = filterSize / 2;"
-                    + "for (int y = -filterHalf; y <= filterHalf; y++) {"
-                    + "for (int x = -filterHalf; x <= filterHalf; x++) {"
-                    + "int clampedX = clamp(gidX + x, 0, width - 1);"
-                    + "int clampedY = clamp(gidY + y, 0, height - 1);"
-                    + "int index = clampedY * width + clampedX;"
-                    + "float filterValue = filter[(y + filterHalf) * filterSize + (x + filterHalf)];"
-                    + "sum += filterValue * convert_float4(input[index]);"
+                    + "output[gid] = convert_uchar4_sat_rte((float4)(122.0f, 122.0f, 122.0f, 122.0f));"
+                    + "for (int i = -filterHalf; i <= filterHalf; i++) {"
+                    + "int index;"
+                    + "if (horizontal == 1) {"
+                    + "index = clamp(lid + i, 0, groupSize - 1);"
+                    + "} else {"
+                    + "index = clamp(gid + i * oppositeSize, 0, globalSize - 1);"
+                    + "localMem[index] = convert_float4(input[index]);"
+                    + "}"
+                    + "float filterValue = filter[i + filterHalf];"
+                    + "sum += filterValue * localMem[index];"
                     + "filterSum += filterValue;"
                     + "}"
-                    + "}"
-                    + "output[gidY * width + gidX] = convert_uchar4_sat_rte(sum / filterSum);"
-                    + "}"
+                    + ""
+                    + "output[gid] = convert_uchar4_sat_rte(sum/filterSum);"
                     + "}";
 
     public static void main(String[] args) throws IOException {
@@ -78,55 +89,40 @@ public class GaussianBlur {
 
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(inputMem));
         clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(outputMem));
-        clSetKernelArg(kernel, 2, Sizeof.cl_int, Pointer.to(new int[]{width}));
-        clSetKernelArg(kernel, 3, Sizeof.cl_int, Pointer.to(new int[]{height}));
-
-//        float[] filter = {
-//                0.000000f, 0.000001f, 0.000007f, 0.000032f, 0.000053f, 0.000032f, 0.000007f, 0.000001f, 0.000000f,
-//                0.000001f, 0.000020f, 0.000239f, 0.001072f, 0.001768f, 0.001072f, 0.000239f, 0.000020f, 0.000001f,
-//                0.000007f, 0.000239f, 0.002915f, 0.013064f, 0.021539f, 0.013064f, 0.002915f, 0.000239f, 0.000007f,
-//                0.000032f, 0.001072f, 0.013064f, 0.058550f, 0.096533f, 0.058550f, 0.013064f, 0.001072f, 0.000032f,
-//                0.000053f, 0.001768f, 0.021539f, 0.096533f, 0.159156f, 0.096533f, 0.021539f, 0.001768f, 0.000053f,
-//                0.000032f, 0.001072f, 0.013064f, 0.058550f, 0.096533f, 0.058550f, 0.013064f, 0.001072f, 0.000032f,
-//                0.000007f, 0.000239f, 0.002915f, 0.013064f, 0.021539f, 0.013064f, 0.002915f, 0.000239f, 0.000007f,
-//                0.000001f, 0.000020f, 0.000239f, 0.001072f, 0.001768f, 0.001072f, 0.000239f, 0.000020f, 0.000001f,
-//                0.000000f, 0.000001f, 0.000007f, 0.000032f, 0.000053f, 0.000032f, 0.000007f, 0.000001f, 0.000000f
-//        };
 
         float[] filter = {
                 0.000134f, 0.004432f, 0.053991f, 0.241971f, 0.398943f, 0.241971f, 0.053991f, 0.004432f, 0.000134f
         };
 
         int filterSize = 9;
-        cl_mem filterMem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, filterSize * filterSize * Sizeof.cl_float, Pointer.to(FloatBuffer.wrap(filter)), null);
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(filterMem));
-        clSetKernelArg(kernel, 5, Sizeof.cl_int, Pointer.to(new int[]{filterSize}));
+        cl_mem filterMem = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, filterSize * Sizeof.cl_float, Pointer.to(FloatBuffer.wrap(filter)), null);
+        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(filterMem));
+        clSetKernelArg(kernel, 3, Sizeof.cl_int, Pointer.to(new int[]{filterSize}));
 
-        long[] localWorkSize = new long[]{width};
+
         long[] globalWorkSize = new long[]{width * height};
-//        long[] localWorkSize = new long[]{16, 16}; // Change this to desired local work group size
 
-        if (localWorkSize[0] <= maxWorkGroupSize) {
+        if (width <= maxWorkGroupSize && height <= maxWorkGroupSize) {
+            ByteBuffer outputBuffer = ByteBuffer.allocateDirect(width * height * 4);
 
-//            long[] globalWorkSize = new long[]{
-//                    (long) Math.ceil(width / (double) localWorkSize[0]) * localWorkSize[0],
-//                    (long) Math.ceil(height / (double) localWorkSize[1]) * localWorkSize[1]
-//            };
+            // horizontal pass
+            long[] localWorkSize = new long[]{width};
             int horizontal = 1;
-            clSetKernelArg(kernel, 6, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
+            clSetKernelArg(kernel, 4, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
             clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, localWorkSize, 0, null, null);
 
-            ByteBuffer outputBuffer = ByteBuffer.allocateDirect(width * height * 4);
             clEnqueueReadBuffer(commandQueue, outputMem, CL_TRUE, 0, width * height * 4, Pointer.to(outputBuffer), 0, null, null);
 
+            // vertical pass
+            localWorkSize = new long[]{height};
+            horizontal = 0;
+            cl_mem inputMem2 = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, width * height * 4, Pointer.to(outputBuffer), null);
+            clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(inputMem2));
+            clSetKernelArg(kernel, 4, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
+            clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, localWorkSize, 0, null, null);
 
-//            // vertical pass
-//            localWorkSize = new long[]{height};
-//            horizontal = 0;
-//
-//            clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(outputBuffer));
-//            clSetKernelArg(kernel, 6, Sizeof.cl_int, Pointer.to(new int[]{horizontal}));
-//            clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, globalWorkSize, localWorkSize, 0, null, null);
+            clEnqueueReadBuffer(commandQueue, outputMem, CL_TRUE, 0, width * height * 4, Pointer.to(outputBuffer), 0, null, null);
+
 
             int[] outputPixels = new int[width * height];
             for (int i = 0; i < outputPixels.length; i++) {
